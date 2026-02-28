@@ -1,0 +1,13 @@
+{
+  "skills_dir": "~/.claude/skills",
+  "memory_dir": "~/.claude/projects/my-project/memory",
+  "memory_index": "~/.claude/projects/my-project/memory/MEMORY.md",
+  "queue_path": "",
+  "drift_state_path": "",
+  "staleness_thresholds": {
+    "infra_days": 14,
+    "reference_days": 30
+  },
+  "infra_keywords": ["infra", "ops", "deploy", "monitor", "agents", "projects", "people"],
+  "exempt_files": ["books.md"]
+}

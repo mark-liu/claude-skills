@@ -1,0 +1,12 @@
+{
+  "name": "agent-orchestration",
+  "version": "1.0.0",
+  "description": "Multi-agent coordination patterns — filesystem state, claim/abort, heartbeat, initializer agents, research-before-coding pipelines",
+  "author": {
+    "name": "Mark Liu",
+    "url": "https://github.com/mark-liu"
+  },
+  "repository": "https://github.com/mark-liu/claude-skills",
+  "license": "MIT",
+  "keywords": ["multi-agent", "orchestration", "pipeline", "coordination"]
+}

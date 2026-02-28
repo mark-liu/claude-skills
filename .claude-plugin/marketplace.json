@@ -1,0 +1,37 @@
+{
+  "name": "mark-liu-skills",
+  "owner": {
+    "name": "Mark Liu",
+    "url": "https://github.com/mark-liu"
+  },
+  "metadata": {
+    "description": "Battle-tested operational patterns for Claude Code — multi-agent orchestration, skill maintenance, and MCP server lifecycle management",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "agent-orchestration",
+      "source": "./plugins/agent-orchestration",
+      "description": "Multi-agent coordination patterns — filesystem state, claim/abort, heartbeat, initializer agents, research-before-coding pipelines",
+      "version": "1.0.0",
+      "license": "MIT",
+      "category": "workflows"
+    },
+    {
+      "name": "skills-audit",
+      "source": "./plugins/skills-audit",
+      "description": "Self-maintaining skill hygiene — cross-reference validation, content drift detection, staleness checks, and improvement queue management",
+      "version": "1.0.0",
+      "license": "MIT",
+      "category": "workflows"
+    },
+    {
+      "name": "mcp-upgrade",
+      "source": "./plugins/mcp-upgrade",
+      "description": "Three-phase MCP server upgrade pipeline — security scanning, smoke testing, and version promotion with rollback support",
+      "version": "1.0.0",
+      "license": "MIT",
+      "category": "operations"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "skills-audit",
+  "version": "1.0.0",
+  "description": "Self-maintaining skill hygiene — cross-reference validation, content drift detection, staleness checks, and improvement queue management",
+  "author": {
+    "name": "Mark Liu",
+    "url": "https://github.com/mark-liu"
+  },
+  "repository": "https://github.com/mark-liu/claude-skills",
+  "license": "MIT",
+  "keywords": ["skills", "audit", "memory", "drift-detection", "staleness"]
+}

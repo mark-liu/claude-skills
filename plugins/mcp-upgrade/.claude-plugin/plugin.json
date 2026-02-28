@@ -1,0 +1,12 @@
+{
+  "name": "mcp-upgrade",
+  "version": "1.0.0",
+  "description": "Three-phase MCP server upgrade pipeline — security scanning, smoke testing, and version promotion with rollback support",
+  "author": {
+    "name": "Mark Liu",
+    "url": "https://github.com/mark-liu"
+  },
+  "repository": "https://github.com/mark-liu/claude-skills",
+  "license": "MIT",
+  "keywords": ["mcp", "upgrade", "security", "promotion", "version-management"]
+}

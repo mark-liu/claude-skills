@@ -1,0 +1,24 @@
+{
+  "claude_json_path": "~/.claude.json",
+  "npm_packages": {
+    "slack-mcp-server": "1.2.0",
+    "@playwright/mcp": "0.0.60",
+    "mcp-remote": "0.1.30"
+  },
+  "git_repos": [
+    {
+      "name": "my-mcp-server",
+      "path": "~/.local/share/my-mcp-server",
+      "remote": "origin",
+      "branch": "main",
+      "servers": ["my-server"]
+    }
+  ],
+  "package_to_servers": {
+    "slack-mcp-server": ["slack"],
+    "@playwright/mcp": ["playwright"],
+    "mcp-remote": ["notion"]
+  },
+  "version_tracking_files": [],
+  "extra_scan_patterns": []
+}
