@@ -5,8 +5,8 @@
     "url": "https://github.com/mark-liu"
   },
   "metadata": {
-    "description": "Battle-tested operational patterns for Claude Code — multi-agent orchestration, skill maintenance, and MCP server lifecycle management",
-    "version": "1.0.0"
+    "description": "Battle-tested operational patterns for Claude Code — multi-agent orchestration, skill maintenance, MCP server lifecycle, and skill authoring",
+    "version": "1.1.0"
   },
   "plugins": [
     {
@@ -32,6 +32,14 @@
       "version": "1.0.0",
       "license": "MIT",
       "category": "operations"
+    },
+    {
+      "name": "skill-authoring",
+      "source": "./plugins/skill-authoring",
+      "description": "SKILL.md format reference and memory integration patterns — topic files, backlinks, promotion pipelines, and persistent knowledge layers",
+      "version": "1.0.0",
+      "license": "MIT",
+      "category": "authoring"
     }
   ]
 }

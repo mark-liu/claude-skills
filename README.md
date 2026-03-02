@@ -1,6 +1,6 @@
 # claude-skills
 
-Operational plugins for Claude Code — multi-agent orchestration, skill maintenance, and MCP server lifecycle management.
+Operational plugins for Claude Code — multi-agent orchestration, skill maintenance, MCP server lifecycle, and skill authoring.
 
 ## Install
 
@@ -10,9 +10,10 @@ claude plugin marketplace add mark-liu/claude-skills
 claude plugin install agent-orchestration@mark-liu-skills
 claude plugin install skills-audit@mark-liu-skills
 claude plugin install mcp-upgrade@mark-liu-skills
+claude plugin install skill-authoring@mark-liu-skills
 ```
 
-Or test locally: `claude --plugin-dir ./plugins/agent-orchestration`
+Or test locally: `claude --plugin-dir ./plugins/skill-authoring`
 
 ## Plugins
 
@@ -21,6 +22,8 @@ Or test locally: `claude --plugin-dir ./plugins/agent-orchestration`
 **skills-audit** — cross-reference validation, content drift detection, staleness checks, improvement queue. 3 skills + 2 commands + 1 agent + 2 scripts.
 
 **mcp-upgrade** — security scanning, smoke testing, version promotion with rollback. 2 skills + 4 commands + 1 agent + 2 scripts.
+
+**skill-authoring** — SKILL.md format reference and memory integration patterns. Topic files, bilateral backlinks, memory indexes, and the promotion pipeline. 2 skills.
 
 ## Requirements
 

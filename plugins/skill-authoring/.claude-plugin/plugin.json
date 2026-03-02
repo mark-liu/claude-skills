@@ -1,0 +1,6 @@
+{
+  "name": "skill-authoring",
+  "description": "How to build, structure, and maintain Claude Code skills — SKILL.md format, memory integration patterns, and persistent knowledge layers",
+  "version": "1.0.0",
+  "license": "MIT"
+}
