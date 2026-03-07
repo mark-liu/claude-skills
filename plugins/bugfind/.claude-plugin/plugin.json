@@ -1,0 +1,12 @@
+{
+  "name": "bugfind",
+  "version": "1.0.0",
+  "description": "Adversarial 3-agent bug analysis across the local codebase — hunter, skeptic, referee.",
+  "author": {
+    "name": "Mark Liu",
+    "url": "https://github.com/mark-liu"
+  },
+  "repository": "https://github.com/mark-liu/claude-skills",
+  "license": "MIT",
+  "keywords": ["bug-finding", "code-audit", "adversarial", "multi-agent"]
+}

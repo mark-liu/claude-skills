@@ -1,0 +1,12 @@
+{
+  "name": "company-research",
+  "version": "1.0.0",
+  "description": "Structured company research for interview and consulting preparation — 3-track parallel research, funding/financials, leadership, strategy, culture, and actionable interview angles",
+  "author": {
+    "name": "Mark Liu",
+    "url": "https://github.com/mark-liu"
+  },
+  "repository": "https://github.com/mark-liu/claude-skills",
+  "license": "MIT",
+  "keywords": ["research", "interview-prep", "company-analysis", "due-diligence"]
+}
