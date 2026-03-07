@@ -28,9 +28,55 @@ Output should be structured (facts, code snippets, API signatures) — not opini
 
 ## Dispatcher Integration
 
-All jobs go into outbox at once. `blockedBy` controls execution order — dispatcher skips jobs whose blockers haven't landed in inbox.
+All jobs go into outbox at once. The `blockedBy` field on each spec controls
+execution order — the dispatcher skips jobs whose blockers haven't landed in
+inbox yet.
 
-Downstream jobs read blocker results from `inbox/{blocker_id}.json`.
+```python
+# Example: dispatch a research-before-coding pipeline
+import json
+from pathlib import Path
+
+OUTBOX = Path("{AGENTS_DIR}") / "outbox"
+
+jobs = [
+    {"id": "research-api", "type": "shell", "command": "..."},
+    {"id": "research-docs", "type": "shell", "command": "..."},
+    {"id": "research-perf", "type": "shell", "command": "..."},
+    {
+        "id": "synthesise",
+        "type": "script",
+        "script": "synthesise.py",  # implement per pipeline
+        "blockedBy": ["research-api", "research-docs", "research-perf"],
+    },
+    {
+        "id": "write-prd",
+        "type": "script",
+        "script": "write-prd.py",  # implement per pipeline
+        "blockedBy": ["synthesise"],
+    },
+]
+for job in jobs:
+    (OUTBOX / f"{job['id']}.json").write_text(json.dumps(job, indent=2))
+```
+
+### Output Convention
+
+Downstream jobs read blocker results from inbox:
+
+```python
+from pathlib import Path
+import json
+
+INBOX = Path("{AGENTS_DIR}") / "inbox"
+
+def load_blocker_results(spec):
+    return {
+        bid: json.loads((INBOX / f"{bid}.json").read_text())
+        for bid in spec.get("blockedBy", [])
+        if (INBOX / f"{bid}.json").exists()
+    }
+```
 
 ## When to Use
 

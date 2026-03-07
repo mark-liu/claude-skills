@@ -23,20 +23,25 @@ JSON over Markdown — LLMs prioritize structured data and are less likely to co
 ```json
 {
   "project": "add-retry-logic",
+  "created": "2026-02-28T09:00:00Z",
   "tasks": [
     {"id": "t1", "name": "Add RetryConfig struct", "passes": false},
     {"id": "t2", "name": "Implement backoff logic", "passes": false},
-    {"id": "t3", "name": "Add unit tests", "passes": false}
+    {"id": "t3", "name": "Wire into HTTP client", "passes": false},
+    {"id": "t4", "name": "Add unit tests", "passes": false}
   ]
 }
 ```
 
-Agents flip `passes` to `true` only after implementation + verification.
+Coding agents flip `passes` to `true` only after implementation + verification.
+The tracker is the single source of truth for what's done vs pending.
 
 ## When to Use
 
 - Multi-feature implementation (3+ tasks)
+- Long-running sessions that may span context window boundaries
 - Multi-agent DAGs where multiple agents touch the same repo
-- Long-running sessions spanning context window boundaries
+- Any pipeline where the coding agent isn't the one setting up the workspace
 
-Skip for single-issue bug fixes or tasks where the user manages the workspace.
+Single-issue, single-agent tasks can fold init into the first step (e.g. a `prep`
+step that creates the branch and validates the environment).

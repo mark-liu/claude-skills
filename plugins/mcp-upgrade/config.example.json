@@ -1,23 +1,36 @@
 {
   "claude_json_path": "~/.claude.json",
   "npm_packages": {
-    "slack-mcp-server": "1.2.0",
-    "@playwright/mcp": "0.0.60",
-    "mcp-remote": "0.1.30"
+    "slack-mcp-server": "1.2.3",
+    "mcp-remote": "0.1.38",
+    "mcp-fantastical": "1.1.0",
+    "@playwright/mcp": "0.0.68",
+    "@piotr-agier/google-drive-mcp": "1.7.3",
+    "codex-mcp-server": "1.4.0"
   },
   "git_repos": [
     {
-      "name": "my-mcp-server",
-      "path": "~/.local/share/my-mcp-server",
+      "name": "telegram-mcp",
+      "path": "~/.local/share/telegram-mcp",
       "remote": "origin",
       "branch": "main",
-      "servers": ["my-server"]
+      "servers": ["telegram"]
+    },
+    {
+      "name": "discord-mcp",
+      "path": "~/.local/share/discord-mcp",
+      "remote": "fork",
+      "branch": "master",
+      "servers": ["discord"]
     }
   ],
   "package_to_servers": {
     "slack-mcp-server": ["slack"],
+    "mcp-remote": ["notion"],
+    "mcp-fantastical": ["fantastical"],
     "@playwright/mcp": ["playwright"],
-    "mcp-remote": ["notion"]
+    "@piotr-agier/google-drive-mcp": ["gdrive-work", "gdrive-personal"],
+    "codex-mcp-server": ["codex"]
   },
   "version_tracking_files": [],
   "extra_scan_patterns": []

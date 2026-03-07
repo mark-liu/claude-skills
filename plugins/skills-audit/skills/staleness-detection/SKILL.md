@@ -1,6 +1,6 @@
 ---
 name: staleness-detection
-description: Flag memory and topic files that haven't been updated past configurable thresholds — infrastructure (14 days) and reference (30 days). Includes hidden workflow detection and orphan finding.
+description: Flag memory and topic files past configurable thresholds — infrastructure (14 days) and reference (30 days). Includes hidden workflow detection and orphan finding.
 ---
 
 # Staleness Detection
@@ -10,12 +10,15 @@ Memory and topic files go stale. This skill defines how to detect staleness, fin
 ## Staleness Check
 
 For each memory topic file:
-1. Parse the "Updated" date from your knowledge index (e.g. MEMORY.md table)
+
+1. Parse the "Updated" date from your knowledge index (e.g. MEMORY.md table rows like `| \`topic.md\` | ... | 2026-02-23 |`)
 2. Classify the file as infrastructure/ops or reference/knowledge
 3. Apply thresholds:
    - **Infrastructure/ops files**: flag if >14 days stale (configurable)
    - **Reference/knowledge files**: flag if >30 days stale (configurable)
 4. Exempt files with special cadences (e.g. quarterly reports, books updated on read)
+
+Also parses cold-tier indexes (e.g. `index-cold.md` sibling) so both hot and cold tiers are checked.
 
 ### Classification
 
@@ -26,6 +29,7 @@ Files containing these keywords get the shorter threshold. Everything else uses 
 ### Configuration
 
 In `config.json`:
+
 ```json
 {
   "staleness_thresholds": {
@@ -63,6 +67,7 @@ Find broken references across the ecosystem:
 ```markdown
 ### Staleness
 - N files checked, M stale
+
 | File | Last Updated | Age | Threshold | Type |
 |------|-------------|-----|-----------|------|
 | infra-lessons.md | 2026-02-10 | 19d | 14d | infra |

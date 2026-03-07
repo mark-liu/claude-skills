@@ -4,10 +4,14 @@
   "memory_index": "~/.claude/projects/my-project/memory/MEMORY.md",
   "queue_path": "",
   "drift_state_path": "",
+  "backup_repo": "",
   "staleness_thresholds": {
     "infra_days": 14,
     "reference_days": 30
   },
   "infra_keywords": ["infra", "ops", "deploy", "monitor", "agents", "projects", "people"],
-  "exempt_files": ["books.md"]
+  "exempt_files": ["books.md"],
+  "utility_skills": ["writing-voice", "pr-style-check", "bear-notes", "notion-tickets"],
+  "standalone_skills": ["resale-valuator", "audio-setup", "keybindings-help"],
+  "expected_symlinks": []
 }

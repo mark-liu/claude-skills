@@ -1,40 +1,55 @@
 #!/usr/bin/env python3
-"""MCP version checker — compares locally pinned npm package versions against
+"""
+MCP version checker — compares locally cached npm package versions against
 npm registry latest, and local git repo HEADs against remote. Reports
 advisories from npm audit.
 
-Outputs JSON to stdout.
+Outputs JSON to stdout. Can be called standalone or as a sub-script.
 
 Requires: Python 3.11+ (stdlib only, no external deps)
-
-Usage:
-    python3 mcp-versions.py --config config.json
 """
 
 import asyncio
-import argparse
 import json
 import os
 import sys
 from pathlib import Path
 
+# ---------------------------------------------------------------------------
+# Configuration — update versions here when upgrading packages
+# ---------------------------------------------------------------------------
+NPM_PACKAGES = {
+    "slack-mcp-server": "1.2.3",
+    "mcp-remote": "0.1.38",
+    "mcp-fantastical": "1.1.0",
+    "@playwright/mcp": "0.0.68",
+    "@piotr-agier/google-drive-mcp": "1.7.3",
+    "codex-mcp-server": "1.4.0",
+}
+
+GIT_REPOS = [
+    {
+        "name": "telegram-mcp",
+        "path": os.path.expanduser("~/.local/share/telegram-mcp"),
+        "remote": "origin",
+        "branch": "main",
+    },
+    {
+        "name": "discord-mcp",
+        "path": os.path.expanduser("~/.local/share/discord-mcp"),
+        "remote": "fork",
+        "branch": "master",
+    },
+]
+
 NPX_CACHE = Path.home() / ".npm" / "_npx"
-
-
-def load_config(config_path: Path) -> dict:
-    """Load configuration from JSON file."""
-    if not config_path.exists():
-        print(f"ERROR: config file not found: {config_path}", file=sys.stderr)
-        print("Copy config.example.json to config.json and edit.", file=sys.stderr)
-        sys.exit(1)
-    return json.loads(config_path.read_text())
 
 
 # ---------------------------------------------------------------------------
 # npm version checks
 # ---------------------------------------------------------------------------
 async def _check_npm(package: str, current: str) -> dict:
-    """Check a single npm package for updates via npm info."""
+    """Check a single npm package for updates via `npm info`."""
     try:
         proc = await asyncio.create_subprocess_exec(
             "npm", "info", package, "version", "--json",
@@ -65,7 +80,7 @@ async def _check_npm(package: str, current: str) -> dict:
 async def _check_git(repo: dict) -> dict:
     """Compare local HEAD against remote HEAD via git ls-remote."""
     name = repo["name"]
-    path = os.path.expanduser(repo["path"])
+    path = repo["path"]
     remote = repo["remote"]
     branch = repo["branch"]
 
@@ -73,6 +88,7 @@ async def _check_git(repo: dict) -> dict:
         return {"repo": name, "error": f"directory not found: {path}"}
 
     try:
+        # Local HEAD
         proc = await asyncio.create_subprocess_exec(
             "git", "-C", path, "rev-parse", "--short", "HEAD",
             stdout=asyncio.subprocess.PIPE,
@@ -83,6 +99,7 @@ async def _check_git(repo: dict) -> dict:
             return {"repo": name, "error": "git rev-parse failed"}
         local_commit = stdout.decode().strip()
 
+        # Remote HEAD (read-only, no fetch)
         proc = await asyncio.create_subprocess_exec(
             "git", "-C", path, "ls-remote", "--heads", remote, branch,
             stdout=asyncio.subprocess.PIPE,
@@ -103,7 +120,7 @@ async def _check_git(repo: dict) -> dict:
             "repo": name,
             "local_commit": local_commit,
             "remote_commit": remote_commit,
-            "update_available": not remote_full.startswith(local_commit),
+            "update_available": not remote_full.startswith(local_commit.replace("", "")),
         }
     except asyncio.TimeoutError:
         return {"repo": name, "error": "timeout"}
@@ -114,11 +131,14 @@ async def _check_git(repo: dict) -> dict:
 # ---------------------------------------------------------------------------
 # npm audit (advisories)
 # ---------------------------------------------------------------------------
-def _find_npx_dirs_for_package(package: str) -> list[Path]:
-    """Find npx cache directories containing a given package."""
-    dirs = []
+def _find_npx_dir_for_package(package: str, pinned_version: str) -> Path | None:
+    """Find the npx cache directory matching a package at its pinned version.
+
+    Only returns the cache dir whose resolved version matches our pin,
+    avoiding stale cache entries that inflate audit results.
+    """
     if not NPX_CACHE.is_dir():
-        return dirs
+        return None
     for cache_dir in NPX_CACHE.iterdir():
         if not cache_dir.is_dir():
             continue
@@ -128,11 +148,12 @@ def _find_npx_dirs_for_package(package: str) -> list[Path]:
         try:
             data = json.loads(lock.read_text())
             packages = data.get("packages", {})
-            if f"node_modules/{package}" in packages:
-                dirs.append(cache_dir)
+            pkg_key = f"node_modules/{package}"
+            if pkg_key in packages and packages[pkg_key].get("version") == pinned_version:
+                return cache_dir
         except (json.JSONDecodeError, OSError):
             continue
-    return dirs
+    return None
 
 
 async def _audit_dir(cache_dir: Path) -> list[dict]:
@@ -145,12 +166,14 @@ async def _audit_dir(cache_dir: Path) -> list[dict]:
             stderr=asyncio.subprocess.DEVNULL,
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+        # npm audit exits non-zero when advisories exist, that's expected
         raw = stdout.decode().strip()
         if not raw:
             return []
 
         data = json.loads(raw)
         advisories = []
+        # npm audit v2+ format: vulnerabilities dict
         vulns = data.get("vulnerabilities", {})
         for dep_name, info in vulns.items():
             via = info.get("via", [])
@@ -167,26 +190,38 @@ async def _audit_dir(cache_dir: Path) -> list[dict]:
         return []
 
 
-async def _check_advisories(npm_packages: dict) -> list[dict]:
-    """Scan npx cache for advisories across all tracked packages."""
-    seen_dirs: set[Path] = set()
-    for package in npm_packages:
-        for d in _find_npx_dirs_for_package(package):
-            seen_dirs.add(d)
+async def _check_advisories() -> list[dict]:
+    """Scan npx cache for advisories across all tracked packages.
 
-    if not seen_dirs:
+    Only audits cache dirs matching our pinned versions — stale cache
+    entries from previous installs are ignored.
+    """
+    audit_targets: list[tuple[str, Path]] = []
+    for package, version in NPM_PACKAGES.items():
+        cache_dir = _find_npx_dir_for_package(package, version)
+        if cache_dir:
+            audit_targets.append((package, cache_dir))
+
+    if not audit_targets:
         return []
+
+    # Deduplicate dirs (multiple packages may share one cache dir)
+    seen_dirs: dict[Path, list[str]] = {}
+    for package, cache_dir in audit_targets:
+        seen_dirs.setdefault(cache_dir, []).append(package)
 
     tasks = [_audit_dir(d) for d in seen_dirs]
     results = await asyncio.gather(*tasks)
 
+    # Deduplicate by (title, url) and tag with parent MCP server
     seen: set[tuple[str, str]] = set()
     advisories = []
-    for batch in results:
+    for (cache_dir, packages), batch in zip(seen_dirs.items(), results):
         for adv in batch:
             key = (adv.get("title", ""), adv.get("url", ""))
             if key not in seen:
                 seen.add(key)
+                adv["mcp_server"] = packages[0]
                 advisories.append(adv)
 
     return advisories
@@ -195,14 +230,11 @@ async def _check_advisories(npm_packages: dict) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-async def async_main(config: dict):
+async def async_main():
     """Run all checks concurrently and output JSON."""
-    npm_packages = config.get("npm_packages", {})
-    git_repos = config.get("git_repos", [])
-
-    npm_tasks = [_check_npm(pkg, ver) for pkg, ver in npm_packages.items()]
-    git_tasks = [_check_git(repo) for repo in git_repos]
-    advisory_task = _check_advisories(npm_packages)
+    npm_tasks = [_check_npm(pkg, ver) for pkg, ver in NPM_PACKAGES.items()]
+    git_tasks = [_check_git(repo) for repo in GIT_REPOS]
+    advisory_task = _check_advisories()
 
     npm_results, git_results, advisories = await asyncio.gather(
         asyncio.gather(*npm_tasks),
@@ -213,6 +245,7 @@ async def async_main(config: dict):
     npm_updates = list(npm_results)
     git_updates = list(git_results)
 
+    # Summary line
     npm_update_count = sum(1 for r in npm_updates if r.get("update_available"))
     git_update_count = sum(1 for r in git_updates if r.get("update_available"))
     adv_count = len(advisories)
@@ -232,15 +265,7 @@ async def async_main(config: dict):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="MCP version checker")
-    parser.add_argument(
-        "--config", type=Path,
-        default=Path(__file__).resolve().parent.parent / "config.json",
-        help="Path to config.json",
-    )
-    args = parser.parse_args()
-    config = load_config(args.config)
-    asyncio.run(async_main(config))
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":

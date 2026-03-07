@@ -29,16 +29,24 @@ Every LLM step should log `chars` and `~tokens` per artifact. Silent context ove
 
 If rendered prompt exceeds budget (e.g. 200k chars), fail immediately rather than burning an API call.
 
-## Truncation, Not Summarization
+## Avoid Compaction (with exceptions)
 
-Never auto-summarize upstream artifacts — summarization loses detail. Truncate with a clear marker:
+Never auto-summarise upstream artifacts. Summarisation loses detail that
+downstream steps may need.
 
-```
-[TRUNCATED — artifact 'analysis.md' exceeded 8000 token limit]
-```
+- Use explicit `inputs` lists to control what each step sees.
+- If an artifact is too big, **truncate with a clear marker** at injection time
+  (not summarise). The marker tells the model it's working with incomplete data:
+  ```
+  [TRUNCATED — artifact 'analysis.md' exceeded 8000 token limit]
+  ```
+- Summaries are a separate, explicit step if needed — never implicit middleware.
 
-Summaries, if needed, are a separate explicit step — never implicit middleware.
+## Cache-Safe Compaction (the exception)
 
-## Cache-Safe Compaction
+When the context window fills during a long session, compaction is safe IF the
+prefix is preserved — same system prompt, same tools, same conversation prefix.
+Append the compaction instruction as a new user message (never mutate the system
+prompt). Same prefix = cache hit on the entire history before the summary.
 
-When the context window fills, compaction is safe if the prefix is preserved (same system prompt, tools, conversation prefix). Append compaction instruction as a new user message — never mutate the system prompt. Same prefix = cache hit.
+Source: [x.com/koylanai/status/2027819266972782633](https://x.com/koylanai/status/2027819266972782633)

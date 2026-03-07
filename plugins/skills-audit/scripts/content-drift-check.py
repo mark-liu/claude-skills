@@ -186,7 +186,7 @@ def save_queue(queue: list[dict], path: Path) -> None:
 
 
 def is_already_queued(queue: list[dict], skill: str, detail: str) -> bool:
-    """Check if a similar drift finding is already in the queue."""
+    """Check if a similar drift finding is already in the queue (pending or in-progress)."""
     for item in queue:
         if item.get("status") in ("done", "wontfix"):
             continue
@@ -218,20 +218,24 @@ def queue_finding(queue: list[dict], finding: dict) -> bool:
 
 
 def extract_watched_files_from_skill(skill_path: Path) -> list[str]:
-    """Extract file references from a SKILL.md for auto-populating watched_files."""
+    """Extract file references from a SKILL.md for auto-populating watched_files.
+
+    Looks for backtick-quoted relative paths and code block references.
+    """
     if not skill_path.exists():
         return []
 
     text = skill_path.read_text()
     files = set()
 
-    # Backtick-quoted paths like `config/pipelines/pr-scout.json`
+    # Match backtick-quoted paths like `config/pipelines/pr-scout.json`
     for m in re.finditer(r"`([a-zA-Z0-9_./-]+\.[a-zA-Z0-9]+)`", text):
         candidate = m.group(1)
+        # Filter to likely repo-relative paths (has directory separator, common extensions)
         if "/" in candidate and not candidate.startswith("http"):
             files.add(candidate)
 
-    # Paths after common directory prefixes
+    # Match paths in code blocks after common prefixes
     for m in re.finditer(r"(?:^|\s)((?:src|config|scripts|templates|tests)/[a-zA-Z0-9_./-]+)", text):
         files.add(m.group(1))
 
@@ -251,12 +255,14 @@ def init_drift_config(
                 print(f"  SKIP {skill_name}: repo not found at {repo_path}")
             continue
 
+        # Set baseline SHA
         head = get_repo_head(repo_path)
         if head:
             skill_cfg["last_audited_sha"] = head
             if verbose:
                 print(f"  {skill_name}: baseline SHA = {head[:8]}")
 
+        # Auto-extract watched files from SKILL.md if not explicitly set
         if not skill_cfg.get("watched_files"):
             skill_dir = skills_dir / skill_name / "SKILL.md"
             extracted = extract_watched_files_from_skill(skill_dir)
@@ -292,9 +298,11 @@ def run_drift_check(
         if verbose:
             print(f"\nChecking {skill_name}:")
 
+        # Hard drift: anchor checks
         hard = check_anchors(skill_name, skill_cfg, verbose=verbose)
         all_findings.extend(hard)
 
+        # Soft drift: watched file changes
         soft = check_watched_files(skill_name, skill_cfg, verbose=verbose)
         all_findings.extend(soft)
 
@@ -324,9 +332,9 @@ def run_drift_check(
 
 def main():
     parser = argparse.ArgumentParser(description="Content drift detection for skills")
-    parser.add_argument("--init", action="store_true", help="Bootstrap: set baseline SHAs")
-    parser.add_argument("--dry-run", action="store_true", help="Report without writing state")
-    parser.add_argument("--verbose", action="store_true", help="Detailed output")
+    parser.add_argument("--init", action="store_true", help="Bootstrap: set baseline SHAs and extract watched files")
+    parser.add_argument("--dry-run", action="store_true", help="Report findings without writing state or queue")
+    parser.add_argument("--verbose", action="store_true", help="Print detailed check output")
     parser.add_argument("--state-path", type=Path, default=None, help="Path to drift-state.json")
     parser.add_argument("--queue-path", type=Path, default=None, help="Path to queue.json")
     parser.add_argument("--skills-dir", type=Path, default=None, help="Path to skills directory")

@@ -7,12 +7,12 @@ description: Security scan an MCP package — npm audit + source pattern analysi
 
 **npm packages**:
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-promote.py" --config "${CLAUDE_PLUGIN_ROOT}/config.json" scan <package> <version>
+python3 ~/scripts/mcp-promote.py scan <package> <version>
 ```
 
 **git repos**:
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-promote.py" --config "${CLAUDE_PLUGIN_ROOT}/config.json" scan-git <name>
+python3 ~/scripts/mcp-promote.py scan-git <name>
 ```
 
 npm scan installs to tmpdir, runs `npm audit --json`, scans source for suspicious patterns. Returns JSON with vulnerability count, source findings, dependency count, package size.

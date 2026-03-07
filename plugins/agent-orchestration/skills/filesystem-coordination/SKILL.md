@@ -42,10 +42,14 @@ def atomic_write(target: Path, content: str) -> None:
 
 ## Incremental Writes
 
-Write partial results as work progresses, not batched at end. If a step crashes, partial artifacts survive for debugging. Long-running jobs write structured progress:
+Write partial results as work progresses, not batched at end.
 
-```json
-{"phase": "compiling", "files_processed": 12, "total": 30}
-```
-
-Failed jobs include their last progress snapshot in the inbox result.
+- Scripts write output artifacts to their designated artifacts directory as they go.
+  If the step crashes mid-way, partial artifacts survive for debugging.
+- Long-running jobs expose a progress file (e.g. via env var). Write structured
+  JSON progress so the orchestrator can report status on failure:
+  ```json
+  {"phase": "compiling", "files_processed": 12, "total": 30}
+  ```
+- Failed jobs include their last progress snapshot in the inbox result,
+  giving the next agent (or human) context on where things broke.

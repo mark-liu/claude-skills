@@ -7,14 +7,21 @@ description: Bump MCP server version pins in config files.
 
 **npm packages**:
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-promote.py" --config "${CLAUDE_PLUGIN_ROOT}/config.json" promote <package> <version>
+python3 ~/scripts/mcp-promote.py promote <package> <version>
 ```
 
 **git repos**:
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-promote.py" --config "${CLAUDE_PLUGIN_ROOT}/config.json" promote-git <name>
+python3 ~/scripts/mcp-promote.py promote-git <name>
 ```
 
-Updates `claude.json` version pins and any configured tracking files. Restart Claude Code after promoting. Rollback = promote the old version.
+Updates version pins in three files:
+- `~/.claude.json` -- pinned version in server args
+- `~/scripts/mcp-versions.py` -- NPM_PACKAGES dict
+- `~/.claude/skills/mcp-stack/SKILL.md` -- version inventory table
+
+Restart Claude Code after promoting.
+
+**Rollback**: promote the previous version, or `git reset --hard <old-commit>` for git repos. Then restart.
 
 See `promotion-pipeline` skill for the full workflow and verification steps.

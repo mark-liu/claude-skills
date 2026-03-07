@@ -23,9 +23,11 @@ Automated source code scanning flags constructs that warrant manual review befor
 | `dns.resolve`, `dns.lookup` | Network | DNS lookups |
 | `WebSocket()` | Network | Persistent connections |
 
+These are **flags for review, not automatic blockers** -- many are legitimate in MCP server code.
+
 ## Interpretation Guide
 
-These are **flags for review, not automatic blockers**. Context matters:
+Context matters when reviewing findings:
 
 | Server type | Expected patterns | Suspicious patterns |
 |-------------|------------------|-------------------|
@@ -36,10 +38,12 @@ These are **flags for review, not automatic blockers**. Context matters:
 
 ## CVE Triage Workflow
 
-1. **Critical/High on MCP SDK** (`@modelcontextprotocol/sdk`): affects all npm MCP servers. Check if patched in the latest SDK version.
-2. **High on direct dependency**: check if the vulnerable code path is actually exercised by your usage.
-3. **Moderate/Low on transitive dep**: note it, upgrade if convenient, don't block on it.
-4. **False positives**: `npm audit` flags everything in the dependency tree. Many CVEs are in server-side code that doesn't apply to stdio transport (e.g. ALB IP spoofing is irrelevant for a local MCP server).
+Morning routine advisories come from `npm audit` against npx cache dirs. Triage:
+
+1. **Critical/High on `@modelcontextprotocol/sdk`**: affects all npm MCP servers -- check if patched in latest SDK version
+2. **High on direct dependency**: check if the vulnerable code path is exercised by our usage
+3. **Moderate/Low on transitive dep**: note it, upgrade if convenient, don't block on it
+4. **False positives**: `npm audit` flags everything in the dep tree -- many CVEs are in server-side code that doesn't apply to our MCP usage (e.g., Hono ALB IP spoofing is irrelevant for stdio transport)
 
 ## Custom Patterns
 

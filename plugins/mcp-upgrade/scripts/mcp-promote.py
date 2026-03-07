@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""MCP promotion pipeline — security scan, smoke test, and version pinning.
+"""
+MCP promotion pipeline — security scan, smoke test, and version pinning.
 
 Usage:
-    mcp-promote.py --config config.json check
-    mcp-promote.py --config config.json scan <package> <version>
-    mcp-promote.py --config config.json scan-git <name>
-    mcp-promote.py --config config.json test <server> [--version VER]
-    mcp-promote.py --config config.json promote <package> <version>
-    mcp-promote.py --config config.json promote-git <name>
+    mcp-promote.py check                            # Show available updates
+    mcp-promote.py scan <package> <version>         # Security scan npm package
+    mcp-promote.py scan-git <name>                  # Scan git repo changes
+    mcp-promote.py test <server> [--version VER]    # MCP handshake smoke test
+    mcp-promote.py promote <package> <version>      # Bump version pins
+    mcp-promote.py promote-git <name>               # Git pull to update
 """
 
 import argparse
@@ -20,7 +21,36 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Built-in source scan patterns
+CLAUDE_JSON = Path.home() / ".claude.json"
+MCP_VERSIONS = Path.home() / "scripts" / "mcp-versions.py"
+MCP_STACK_SKILL = Path.home() / ".claude" / "skills" / "mcp-stack" / "SKILL.md"
+
+# Package name → server name(s) in claude.json
+PACKAGE_TO_SERVERS = {
+    "slack-mcp-server": ["slack"],
+    "mcp-remote": ["notion"],
+    "mcp-fantastical": ["fantastical"],
+    "@playwright/mcp": ["playwright"],
+    "@piotr-agier/google-drive-mcp": ["gdrive-work", "gdrive-personal"],
+    "codex-mcp-server": ["codex"],
+}
+
+GIT_REPOS = {
+    "telegram-mcp": {
+        "path": str(Path.home() / ".local/share/telegram-mcp"),
+        "remote": "origin",
+        "branch": "main",
+        "servers": ["telegram"],
+    },
+    "discord-mcp": {
+        "path": str(Path.home() / ".local/share/discord-mcp"),
+        "remote": "fork",
+        "branch": "master",
+        "servers": ["discord"],
+    },
+}
+
+# Patterns flagged in source code — focus on genuinely suspicious constructs
 SOURCE_PATTERNS = [
     (r'\beval\s*\(', "eval() — dynamic code execution"),
     (r'\bnew\s+Function\s*\(', "new Function() — dynamic code execution"),
@@ -36,53 +66,27 @@ SOURCE_PATTERNS = [
 ]
 
 
-def load_plugin_config(config_path: Path) -> dict:
-    """Load plugin configuration."""
-    if not config_path.exists():
-        print(f"ERROR: config file not found: {config_path}", file=sys.stderr)
-        print("Copy config.example.json to config.json and edit.", file=sys.stderr)
-        sys.exit(1)
-    return json.loads(config_path.read_text())
+def load_config() -> dict:
+    return json.loads(CLAUDE_JSON.read_text())
 
 
-def load_claude_config(config: dict) -> dict:
-    """Load claude.json from path in config."""
-    path = Path(os.path.expanduser(config.get("claude_json_path", "~/.claude.json")))
-    return json.loads(path.read_text())
-
-
-def save_claude_config(config: dict, data: dict):
-    """Save claude.json."""
-    path = Path(os.path.expanduser(config.get("claude_json_path", "~/.claude.json")))
-    path.write_text(json.dumps(data, indent=2) + "\n")
-
-
-def get_scan_patterns(config: dict) -> list[tuple[str, str]]:
-    """Get scan patterns including any extras from config."""
-    patterns = list(SOURCE_PATTERNS)
-    for extra in config.get("extra_scan_patterns", []):
-        if isinstance(extra, list) and len(extra) == 2:
-            patterns.append((extra[0], extra[1]))
-    return patterns
+def save_config(data: dict):
+    CLAUDE_JSON.write_text(json.dumps(data, indent=2) + "\n")
 
 
 # ---------------------------------------------------------------------------
 # CHECK
 # ---------------------------------------------------------------------------
-def cmd_check(config: dict):
+def cmd_check():
     """Delegate to mcp-versions.py."""
-    versions_script = Path(__file__).resolve().parent / "mcp-versions.py"
-    config_path = Path(__file__).resolve().parent.parent / "config.json"
-    subprocess.run([sys.executable, str(versions_script), "--config", str(config_path)])
+    subprocess.run([sys.executable, str(MCP_VERSIONS)])
 
 
 # ---------------------------------------------------------------------------
 # SCAN NPM
 # ---------------------------------------------------------------------------
-def cmd_scan_npm(config: dict, package: str, version: str) -> str:
+def cmd_scan_npm(package: str, version: str) -> str:
     """Install npm package in temp dir and run security analysis."""
-    patterns = get_scan_patterns(config)
-
     with tempfile.TemporaryDirectory(prefix="mcp-scan-") as tmpdir:
         subprocess.run(["npm", "init", "-y"], cwd=tmpdir, capture_output=True)
         result = subprocess.run(
@@ -115,7 +119,7 @@ def cmd_scan_npm(config: dict, package: str, version: str) -> str:
 
         # Source pattern scan
         pkg_dir = Path(tmpdir) / "node_modules" / package
-        findings = _scan_source(pkg_dir, patterns) if pkg_dir.exists() else {}
+        findings = _scan_source(pkg_dir) if pkg_dir.exists() else {}
 
         # Dependency count
         nm = Path(tmpdir) / "node_modules"
@@ -148,10 +152,10 @@ def cmd_scan_npm(config: dict, package: str, version: str) -> str:
     return json.dumps(report, indent=2)
 
 
-def _scan_source(pkg_dir: Path, patterns: list[tuple[str, str]]) -> dict:
+def _scan_source(pkg_dir: Path) -> dict:
     """Scan source files for suspicious patterns."""
     findings = {}
-    for pattern_re, label in patterns:
+    for pattern_re, label in SOURCE_PATTERNS:
         matches = []
         for f in pkg_dir.rglob("*"):
             if f.suffix not in (".js", ".ts", ".mjs", ".cjs"):
@@ -176,17 +180,14 @@ def _scan_source(pkg_dir: Path, patterns: list[tuple[str, str]]) -> dict:
 # ---------------------------------------------------------------------------
 # SCAN GIT
 # ---------------------------------------------------------------------------
-def cmd_scan_git(config: dict, name: str):
+def cmd_scan_git(name: str):
     """Fetch and diff git repo, scan changes for suspicious patterns."""
-    git_repos = {r["name"]: r for r in config.get("git_repos", [])}
-    repo = git_repos.get(name)
+    repo = GIT_REPOS.get(name)
     if not repo:
-        print(json.dumps({"error": f"Unknown repo: {name}. Known: {list(git_repos)}"}, indent=2))
+        print(json.dumps({"error": f"Unknown repo: {name}. Known: {list(GIT_REPOS)}"}, indent=2))
         return
 
-    path = os.path.expanduser(repo["path"])
-    remote, branch = repo["remote"], repo["branch"]
-    patterns = get_scan_patterns(config)
+    path, remote, branch = repo["path"], repo["remote"], repo["branch"]
 
     subprocess.run(["git", "-C", path, "fetch", remote], capture_output=True)
 
@@ -200,8 +201,9 @@ def cmd_scan_git(config: dict, name: str):
         capture_output=True, text=True,
     ).stdout
 
+    # Scan added lines only
     findings = {}
-    for pattern_re, label in patterns:
+    for pattern_re, label in SOURCE_PATTERNS:
         matches = []
         for line in diff.splitlines():
             if line.startswith("+") and not line.startswith("+++"):
@@ -232,7 +234,13 @@ def cmd_scan_git(config: dict, name: str):
 # TEST (MCP handshake smoke test)
 # ---------------------------------------------------------------------------
 def _resolve_npm_bin(package: str, version: str) -> tuple[str, str] | None:
-    """Install npm package to tmpdir and return (executable, entrypoint_path)."""
+    """Install npm package to tmpdir and return (executable, entrypoint_path).
+
+    npx doesn't forward stdin to child processes, so we resolve the actual
+    entrypoint and run it directly. Handles two cases:
+    - Pure Node.js servers: returns (node, script.js)
+    - Native binary wrappers (e.g. slack Go binary): returns (binary, "")
+    """
     tmpdir = tempfile.mkdtemp(prefix="mcp-test-")
     subprocess.run(["npm", "init", "-y"], cwd=tmpdir, capture_output=True)
     result = subprocess.run(
@@ -260,7 +268,8 @@ def _resolve_npm_bin(package: str, version: str) -> tuple[str, str] | None:
     if not entrypoint.exists():
         return None
 
-    # Check if the bin wrapper launches a native binary
+    # Check if the bin wrapper launches a native binary via execFileSync.
+    # If so, resolve the native binary path and run it directly.
     try:
         wrapper_src = entrypoint.read_text(errors="replace")
         if "execFileSync" in wrapper_src:
@@ -281,6 +290,7 @@ def _find_native_binary(node_modules: Path) -> Path | None:
     import platform
     arch = "arm64" if platform.machine() == "arm64" else "amd64"
     plat = "darwin" if sys.platform == "darwin" else "linux"
+    pattern = f"*-{plat}-{arch}"
 
     for d in node_modules.iterdir():
         if d.is_dir() and d.name.endswith(f"-{plat}-{arch}"):
@@ -292,10 +302,10 @@ def _find_native_binary(node_modules: Path) -> Path | None:
     return None
 
 
-async def cmd_test(config: dict, server_name: str, version: str | None = None) -> str:
+async def cmd_test(server_name: str, version: str | None = None) -> str:
     """Start MCP server and run protocol handshake + tools/list."""
-    claude_cfg = load_claude_config(config)
-    srv = claude_cfg.get("mcpServers", {}).get(server_name)
+    config = load_config()
+    srv = config.get("mcpServers", {}).get(server_name)
     if not srv:
         return json.dumps({"error": f"Server '{server_name}' not found in claude.json"}, indent=2)
 
@@ -303,6 +313,8 @@ async def cmd_test(config: dict, server_name: str, version: str | None = None) -
     args = list(srv.get("args", []))
     env_vars = srv.get("env", {})
 
+    # npx and uv don't forward stdin to child processes, so we bypass them
+    # and run the actual entrypoint directly.
     if command == "npx":
         pkg_name = None
         pkg_version = None
@@ -321,16 +333,17 @@ async def cmd_test(config: dict, server_name: str, version: str | None = None) -
             test_version = version or pkg_version or "latest"
             resolved = _resolve_npm_bin(pkg_name, test_version)
             if resolved:
-                if resolved[1]:
-                    command = resolved[0]
+                if resolved[1]:  # Node.js script
+                    command = resolved[0]  # node
                     args = [resolved[1]] + extra_args
-                else:
+                else:  # Native binary
                     command = resolved[0]
                     args = extra_args
             else:
                 return json.dumps({"error": f"Failed to resolve bin for {pkg_name}@{test_version}"}, indent=2)
 
     elif command.endswith("/uv") or os.path.basename(command) == "uv":
+        # uv run: extract --directory and script, run with venv python directly
         project_dir = None
         script = None
         i = 0
@@ -375,6 +388,7 @@ async def cmd_test(config: dict, server_name: str, version: str | None = None) -
             },
         }, timeout=30)
 
+        # Initialized notification (no response expected)
         msg = json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n"
         proc.stdin.write(msg.encode())
         await proc.stdin.drain()
@@ -435,18 +449,18 @@ async def _mcp_exchange(proc, message: dict, timeout: float = 15) -> dict:
         try:
             return json.loads(line.decode())
         except json.JSONDecodeError:
-            continue
+            continue  # Skip non-JSON output (log lines, etc.)
 
 
 # ---------------------------------------------------------------------------
 # PROMOTE NPM
 # ---------------------------------------------------------------------------
-def cmd_promote_npm(config: dict, package: str, version: str) -> str:
-    """Update version pins in claude.json and tracking files."""
+def cmd_promote_npm(package: str, version: str) -> str:
+    """Update version pins in claude.json, mcp-versions.py, and mcp-stack skill."""
     # 1. claude.json
-    claude_cfg = load_claude_config(config)
+    config = load_config()
     updated_servers = []
-    for name, srv in claude_cfg.get("mcpServers", {}).items():
+    for name, srv in config.get("mcpServers", {}).items():
         for i, arg in enumerate(srv.get("args", [])):
             if f"{package}@" in arg:
                 srv["args"][i] = f"{package}@{version}"
@@ -455,40 +469,47 @@ def cmd_promote_npm(config: dict, package: str, version: str) -> str:
     if not updated_servers:
         return json.dumps({"error": f"{package} not found in claude.json args"}, indent=2)
 
-    save_claude_config(config, claude_cfg)
+    save_config(config)
 
-    # 2. Version tracking files
-    updated_files = [config.get("claude_json_path", "~/.claude.json")]
-    for tracking_file in config.get("version_tracking_files", []):
-        path = Path(os.path.expanduser(tracking_file))
-        if path.exists():
-            content = path.read_text()
-            pattern = rf'("{re.escape(package)}":\s*")[^"]*(")'
-            new_content = re.sub(pattern, rf"\g<1>{version}\2", content)
-            if new_content != content:
-                path.write_text(new_content)
-                updated_files.append(tracking_file)
+    # 2. mcp-versions.py
+    content = MCP_VERSIONS.read_text()
+    pattern = rf'("{re.escape(package)}":\s*")[^"]*(")'
+    new_content = re.sub(pattern, rf"\g<1>{version}\2", content)
+    MCP_VERSIONS.write_text(new_content)
+
+    # 3. mcp-stack skill (version table)
+    skill_updated = False
+    if MCP_STACK_SKILL.exists():
+        skill = MCP_STACK_SKILL.read_text()
+        pkg_escaped = re.escape(package)
+        skill_pattern = rf'(\|\s*{pkg_escaped}\s*\|[^|]*\|\s*)[^\s|]+(\s*\|)'
+        new_skill = re.sub(skill_pattern, rf"\g<1>{version}\2", skill)
+        if new_skill != skill:
+            MCP_STACK_SKILL.write_text(new_skill)
+            skill_updated = True
 
     return json.dumps({
         "package": package,
         "version": version,
         "updated_servers": updated_servers,
-        "updated_files": updated_files,
+        "updated_files": [
+            "~/.claude.json",
+            "~/scripts/mcp-versions.py",
+            *(["~/.claude/skills/mcp-stack/SKILL.md"] if skill_updated else []),
+        ],
     }, indent=2)
 
 
 # ---------------------------------------------------------------------------
 # PROMOTE GIT
 # ---------------------------------------------------------------------------
-def cmd_promote_git(config: dict, name: str) -> str:
+def cmd_promote_git(name: str) -> str:
     """Git pull to update repo."""
-    git_repos = {r["name"]: r for r in config.get("git_repos", [])}
-    repo = git_repos.get(name)
+    repo = GIT_REPOS.get(name)
     if not repo:
-        return json.dumps({"error": f"Unknown repo: {name}. Known: {list(git_repos)}"}, indent=2)
+        return json.dumps({"error": f"Unknown repo: {name}. Known: {list(GIT_REPOS)}"}, indent=2)
 
-    path = os.path.expanduser(repo["path"])
-    remote, branch = repo["remote"], repo["branch"]
+    path, remote, branch = repo["path"], repo["remote"], repo["branch"]
 
     result = subprocess.run(
         ["git", "-C", path, "pull", remote, branch],
@@ -502,10 +523,22 @@ def cmd_promote_git(config: dict, name: str) -> str:
         capture_output=True, text=True,
     ).stdout.strip()
 
+    # Update mcp-stack skill commit hash
+    skill_updated = False
+    if MCP_STACK_SKILL.exists():
+        skill = MCP_STACK_SKILL.read_text()
+        name_escaped = re.escape(name)
+        pattern = rf'(\|\s*{name_escaped}\s*\|\s*git\s*\|\s*HEAD\s*\()[^)]+(\))'
+        new_skill = re.sub(pattern, rf"\g<1>{head}\2", skill)
+        if new_skill != skill:
+            MCP_STACK_SKILL.write_text(new_skill)
+            skill_updated = True
+
     return json.dumps({
         "repo": name,
         "new_commit": head,
         "output": result.stdout.strip(),
+        "updated_files": [*(["~/.claude/skills/mcp-stack/SKILL.md"] if skill_updated else [])],
     }, indent=2)
 
 
@@ -514,11 +547,6 @@ def cmd_promote_git(config: dict, name: str) -> str:
 # ---------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="MCP promotion pipeline")
-    parser.add_argument(
-        "--config", type=Path,
-        default=Path(__file__).resolve().parent.parent / "config.json",
-        help="Path to config.json",
-    )
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("check", help="Show available updates")
@@ -542,20 +570,19 @@ def main():
     p.add_argument("name")
 
     args = parser.parse_args()
-    config = load_plugin_config(args.config)
 
     if args.command == "check":
-        cmd_check(config)
+        cmd_check()
     elif args.command == "scan":
-        print(cmd_scan_npm(config, args.package, args.version))
+        print(cmd_scan_npm(args.package, args.version))
     elif args.command == "scan-git":
-        cmd_scan_git(config, args.name)
+        cmd_scan_git(args.name)
     elif args.command == "test":
-        print(asyncio.run(cmd_test(config, args.server, args.version)))
+        print(asyncio.run(cmd_test(args.server, args.version)))
     elif args.command == "promote":
-        print(cmd_promote_npm(config, args.package, args.version))
+        print(cmd_promote_npm(args.package, args.version))
     elif args.command == "promote-git":
-        print(cmd_promote_git(config, args.name))
+        print(cmd_promote_git(args.name))
     else:
         parser.print_help()
 
