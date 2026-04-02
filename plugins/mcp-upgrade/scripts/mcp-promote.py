@@ -90,7 +90,7 @@ def cmd_scan_npm(package: str, version: str) -> str:
     with tempfile.TemporaryDirectory(prefix="mcp-scan-") as tmpdir:
         subprocess.run(["npm", "init", "-y"], cwd=tmpdir, capture_output=True)
         result = subprocess.run(
-            ["npm", "install", f"{package}@{version}"],
+            ["npm", "install", "--ignore-scripts", f"{package}@{version}"],
             cwd=tmpdir, capture_output=True, text=True,
         )
         if result.returncode != 0:
