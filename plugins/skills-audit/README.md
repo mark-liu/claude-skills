@@ -31,7 +31,7 @@ Additional automated checks: security scan (if `security_scan.py` is provided), 
 ## Setup
 
 1. Copy `config.example.json` to `config.json` and edit paths for your environment
-2. For drift detection: seed `drift-state.json` with code-backed skills, then run `python3 scripts/content-drift-check.py --init`
+2. For drift detection: seed `drift-state.json` with code-backed skills, then run `python3 scripts/content_drift_check.py --init`
 3. Schedule `scripts/audit-check.py --config config.json` via cron, systemd timer, or launchd
 
 ## Configuration
@@ -51,7 +51,7 @@ Key fields in `config.json`:
 ## Scripts
 
 - `scripts/audit-check.py` -- main checker, run via scheduler or CLI (`--dry-run`, `--no-notify`, `--output-dir`)
-- `scripts/content-drift-check.py` -- standalone drift detection (`--init`, `--dry-run`, `--verbose`, `--state-path`, `--queue-path`)
+- `scripts/content_drift_check.py` -- standalone drift detection (`--init`, `--dry-run`, `--verbose`, `--state-path`, `--queue-path`)
 
 ## Queue Format
 

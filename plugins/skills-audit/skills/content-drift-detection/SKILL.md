@@ -46,7 +46,7 @@ Skill references source files. The audit checks git for changes since last run. 
 ## Setup
 
 1. Seed `drift-state.json` with skills that reference code repos
-2. Run `python3 scripts/content-drift-check.py --init` to set baseline SHAs and auto-extract watched files from SKILL.md
+2. Run `python3 scripts/content_drift_check.py --init` to set baseline SHAs and auto-extract watched files from SKILL.md
 3. Run `--dry-run --verbose` to verify anchors are matching
 
 ## Adding a New Skill
@@ -61,8 +61,8 @@ Then run `--init` to set the baseline SHA.
 ## Script CLI
 
 ```
-python3 content-drift-check.py [--init] [--dry-run] [--verbose]
-python3 content-drift-check.py --state-path PATH --queue-path PATH --skills-dir PATH
+python3 content_drift_check.py [--init] [--dry-run] [--verbose]
+python3 content_drift_check.py --state-path PATH --queue-path PATH --skills-dir PATH
 ```
 
 The script auto-queues hard drift findings with `priority: high` in the audit queue.

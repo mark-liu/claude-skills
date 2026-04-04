@@ -8,8 +8,8 @@ Two tiers:
     for changes since last run. Changed files = informational flag.
 
 Usage:
-    python3 content-drift-check.py [--init] [--dry-run] [--verbose]
-    python3 content-drift-check.py --state-path PATH --queue-path PATH
+    python3 content_drift_check.py [--init] [--dry-run] [--verbose]
+    python3 content_drift_check.py --state-path PATH --queue-path PATH
 """
 
 from __future__ import annotations
