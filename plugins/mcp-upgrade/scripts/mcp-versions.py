@@ -120,7 +120,7 @@ async def _check_git(repo: dict) -> dict:
             "repo": name,
             "local_commit": local_commit,
             "remote_commit": remote_commit,
-            "update_available": not remote_full.startswith(local_commit.replace("", "")),
+            "update_available": not remote_full.startswith(local_commit),
         }
     except asyncio.TimeoutError:
         return {"repo": name, "error": "timeout"}
