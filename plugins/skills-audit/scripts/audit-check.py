@@ -196,6 +196,123 @@ def check_missing_crossrefs(
     return missing
 
 
+# Inserted after check_missing_crossrefs by patch script.
+
+# Thariq's 9 category taxonomy. Each entry: (slug, keyword regex list).
+# Keywords are deliberately broad — straddle detection looks for skills that
+# score on 3+ categories with no clear winner.
+SKILL_CATEGORIES = {
+    "library-api-ref":   [r"\blibrary\b", r"\bAPI\b", r"\bCLI\b", r"\bSDK\b", r"\bgotcha", r"\bedge case", r"\busage pattern"],
+    "product-verify":    [r"\bverify\b", r"\bverification\b", r"\bplaywright\b", r"\bbrowser\b", r"\be2e\b", r"\bsmoke test", r"\bUI flow"],
+    "data-analysis":     [r"\bquery\b", r"\bdashboard\b", r"\bprometheus\b", r"\bgrafana\b", r"\bloki\b", r"\bbigquery\b", r"\bmetrics\b"],
+    "business-process":  [r"\bstandup\b", r"\bticket\b", r"\bslack\b", r"\bnotion\b", r"\bautomate\b", r"\binvoice\b", r"\bcalendar"],
+    "scaffolding":       [r"\bscaffold\b", r"\btemplate\b", r"\bgenerate\b", r"\bcreate\s+(?:app|repo|skill)\b", r"\bboilerplate"],
+    "code-quality":      [r"\breview\b", r"\bcode quality\b", r"\bstyle\b", r"\blint\b", r"\badversarial\b", r"\btest practice"],
+    "cicd-deploy":       [r"\bdeploy\b", r"\bGH Actions\b", r"\bGitHub Actions\b", r"\bpush\b", r"\bmerge\b", r"\brelease\b", r"\bcherry-pick"],
+    "runbook":           [r"\binvestigate\b", r"\bsymptom\b", r"\boncall\b", r"\balert\b", r"\bdebug\b", r"\bdiagnose\b", r"\btriage\b"],
+    "infra-ops":         [r"\bcluster\b", r"\bterraform\b", r"\bupgrade\b", r"\bfleet\b", r"\bvalidator\b", r"\bk8s\b", r"\bkubernetes\b", r"\bargocd\b"],
+}
+
+
+def check_category_straddle(skills_dir: Path) -> list[dict]:
+    """Score each skill against Thariq's 9-category taxonomy.
+
+    Per Thariq (https://x.com/trq212/status/2033949937936085378):
+    "Best skills fit cleanly into one. Straddling several = confused skill."
+
+    Implementation: hit-count per category from frontmatter+body. Flag a skill
+    when its top category has <2x the score of category #2 AND at least 3
+    categories score >0. That's the "no clear winner" signal — not the same
+    as a multi-tag skill (e.g. argocd-operations legitimately spans infra-ops
+    + runbook, which is fine because infra-ops wins decisively).
+    """
+    findings = []
+    if not skills_dir.is_dir():
+        return findings
+
+    compiled = {
+        cat: [re.compile(pat, re.IGNORECASE) for pat in pats]
+        for cat, pats in SKILL_CATEGORIES.items()
+    }
+
+    for skill_dir in sorted(skills_dir.iterdir()):
+        skill_file = skill_dir / "SKILL.md"
+        if not skill_file.exists():
+            continue
+
+        text = skill_file.read_text()
+        # Score: count distinct keyword *hits* per category (cap each pattern at 3 to avoid
+        # dominant-keyword skew).
+        scores = {}
+        for cat, patterns in compiled.items():
+            total = 0
+            for p in patterns:
+                total += min(len(p.findall(text)), 3)
+            if total:
+                scores[cat] = total
+
+        if len(scores) < 3:
+            continue
+        ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+        top_cat, top_score = ranked[0]
+        runner_cat, runner_score = ranked[1]
+        third_score = ranked[2][1]
+        # Straddle = no clear winner: top < 1.4x runner AND third > 60% of top.
+        # Avoids flagging skills with a dominant primary + natural secondary
+        # (e.g. infra-ops + runbook for ops-investigation skills).
+        if top_score < runner_score * 1.4 and third_score * 1.0 / top_score >= 0.6:
+            findings.append({
+                "skill": skill_dir.name,
+                "type": "category_straddle",
+                "top": top_cat,
+                "top_score": top_score,
+                "runner_up": runner_cat,
+                "runner_score": runner_score,
+                "all_scored": dict(ranked),
+                "detail": f"no dominant category: {top_cat}={top_score} vs {runner_cat}={runner_score}; consider splitting or sharpening description",
+            })
+
+    return findings
+
+
+def check_missing_gotchas(skills_dir: Path, min_age_days: int = 30) -> list[dict]:
+    """Flag mature skills missing a gotchas section.
+
+    Per Thariq: gotchas are "the highest-signal content in any skill" and
+    should grow iteratively (1 entry day 1 → 10 entries by month 3). A
+    >30-day-old skill with no gotchas section either hasn't been used
+    much, or has accumulated tribal-knowledge that should be written down.
+    """
+    findings = []
+    if not skills_dir.is_dir():
+        return findings
+
+    threshold = datetime.now() - timedelta(days=min_age_days)
+    for skill_dir in sorted(skills_dir.iterdir()):
+        skill_file = skill_dir / "SKILL.md"
+        if not skill_file.exists():
+            continue
+        mtime = datetime.fromtimestamp(skill_file.stat().st_mtime)
+        if mtime > threshold:
+            continue
+        text = skill_file.read_text().lower()
+        # Permissive: any header variant containing "gotcha"
+        if re.search(r"^#+\s+[^\n]*gotcha", text, re.MULTILINE):
+            continue
+        # Heuristic exemption: short reference cards (< 1500 chars body) don't need it.
+        body = re.sub(r"^---.*?---", "", skill_file.read_text(), count=1, flags=re.DOTALL)
+        if len(body) < 1500:
+            continue
+        findings.append({
+            "skill": skill_dir.name,
+            "type": "missing_gotchas",
+            "age_days": (datetime.now() - mtime).days,
+            "detail": f"skill is {(datetime.now() - mtime).days}d old, no '## Gotchas'/'## Known Gotchas' section",
+        })
+
+    return findings
+
+
 def check_backup_integrity(
     expected_symlinks: dict[Path, Path] | None = None,
     backup_repo: Path | None = None,
@@ -411,6 +528,8 @@ def main():
     stale = check_staleness(index, infra_days, reference_days, infra_keywords, exempt_files)
     pending_queue = check_queue(queue_path)
     no_xrefs = check_missing_crossrefs(skills_dir, utility_skills, standalone_skills)
+    straddles = check_category_straddle(skills_dir)
+    missing_gotchas = check_missing_gotchas(skills_dir, min_age_days=cfg.get("gotchas_min_age_days", 30))
     hard_drift, soft_drift = check_content_drift(drift_state_path, queue_path, skills_dir)
     backup_issues = check_backup_integrity(symlink_map or None, backup_repo or None)
 
@@ -440,6 +559,10 @@ def main():
         parts.append(f"{len(hard_drift)} broken anchor{'s' if len(hard_drift) != 1 else ''}")
     if no_xrefs:
         parts.append(f"{len(no_xrefs)} skill{'s' if len(no_xrefs) != 1 else ''} without cross-refs")
+    if straddles:
+        parts.append(f"{len(straddles)} category-straddle{'s' if len(straddles) != 1 else ''}")
+    if missing_gotchas:
+        parts.append(f"{len(missing_gotchas)} skill{'s' if len(missing_gotchas) != 1 else ''} missing gotchas section")
     if security_high:
         parts.append(f"{len(security_high)} security finding{'s' if len(security_high) != 1 else ''}")
     if backup_issues:
@@ -482,6 +605,16 @@ def main():
             detail = s.get("detail", "missing ## Cross-References section")
             print(f"  {s['skill']}: {detail}")
 
+    if straddles:
+        print(f"\nCategory-straddle skills ({len(straddles)}):")
+        for s in straddles:
+            print(f"  {s['skill']}: {s['detail']}")
+
+    if missing_gotchas:
+        print(f"\nSkills missing gotchas section ({len(missing_gotchas)}):")
+        for s in missing_gotchas:
+            print(f"  {s['skill']}: {s['detail']}")
+
     if security_high:
         print(f"\nSecurity findings ({len(security_high)} high/critical):")
         for f in security_high:
@@ -502,6 +635,8 @@ def main():
         "hard_drift": hard_drift,
         "soft_drift": soft_drift,
         "missing_crossrefs": no_xrefs,
+        "category_straddles": straddles,
+        "missing_gotchas": missing_gotchas,
         "backup_issues": backup_issues,
     }
     if security_high:
