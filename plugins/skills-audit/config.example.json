@@ -9,9 +9,30 @@
     "infra_days": 14,
     "reference_days": 30
   },
-  "infra_keywords": ["infra", "ops", "deploy", "monitor", "agents", "projects", "people"],
-  "exempt_files": ["books.md"],
-  "utility_skills": ["writing-voice", "pr-style-check", "bear-notes", "notion-tickets"],
-  "standalone_skills": ["resale-valuator", "audio-setup", "keybindings-help"],
-  "expected_symlinks": []
+  "infra_keywords": [
+    "infra",
+    "ops",
+    "deploy",
+    "monitor",
+    "agents",
+    "projects",
+    "people"
+  ],
+  "exempt_files": [
+    "books.md"
+  ],
+  "utility_skills": [
+    "writing-voice",
+    "pr-style-check",
+    "bear-notes",
+    "notion-tickets"
+  ],
+  "standalone_skills": [
+    "resale-valuator",
+    "audio-setup",
+    "keybindings-help"
+  ],
+  "expected_symlinks": [],
+  "straddle_exempt_skills": [],
+  "gotchas_min_age_days": 30
 }

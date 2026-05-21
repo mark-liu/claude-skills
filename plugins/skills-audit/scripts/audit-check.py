@@ -214,7 +214,7 @@ SKILL_CATEGORIES = {
 }
 
 
-def check_category_straddle(skills_dir: Path) -> list[dict]:
+def check_category_straddle(skills_dir: Path, exempt: set[str] | None = None) -> list[dict]:
     """Score each skill against Thariq's 9-category taxonomy.
 
     Per Thariq (https://x.com/trq212/status/2033949937936085378):
@@ -227,6 +227,8 @@ def check_category_straddle(skills_dir: Path) -> list[dict]:
     + runbook, which is fine because infra-ops wins decisively).
     """
     findings = []
+    if exempt is None:
+        exempt = set()
     if not skills_dir.is_dir():
         return findings
 
@@ -240,6 +242,8 @@ def check_category_straddle(skills_dir: Path) -> list[dict]:
         if not skill_file.exists():
             continue
 
+        if skill_dir.name in exempt:
+            continue
         text = skill_file.read_text()
         # Score: count distinct keyword *hits* per category (cap each pattern at 3 to avoid
         # dominant-keyword skew).
@@ -260,7 +264,7 @@ def check_category_straddle(skills_dir: Path) -> list[dict]:
         # Straddle = no clear winner: top < 1.4x runner AND third > 60% of top.
         # Avoids flagging skills with a dominant primary + natural secondary
         # (e.g. infra-ops + runbook for ops-investigation skills).
-        if top_score < runner_score * 1.4 and third_score * 1.0 / top_score >= 0.6:
+        if runner_score >= 5 and top_score < runner_score * 1.4 and third_score * 1.0 / top_score >= 0.6:
             findings.append({
                 "skill": skill_dir.name,
                 "type": "category_straddle",
@@ -528,7 +532,7 @@ def main():
     stale = check_staleness(index, infra_days, reference_days, infra_keywords, exempt_files)
     pending_queue = check_queue(queue_path)
     no_xrefs = check_missing_crossrefs(skills_dir, utility_skills, standalone_skills)
-    straddles = check_category_straddle(skills_dir)
+    straddles = check_category_straddle(skills_dir, set(cfg.get("straddle_exempt_skills", [])))
     missing_gotchas = check_missing_gotchas(skills_dir, min_age_days=cfg.get("gotchas_min_age_days", 30))
     hard_drift, soft_drift = check_content_drift(drift_state_path, queue_path, skills_dir)
     backup_issues = check_backup_integrity(symlink_map or None, backup_repo or None)
